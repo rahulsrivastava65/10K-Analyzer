@@ -286,6 +286,11 @@ st.markdown(
             min-height: 2.75rem;
         }
     }
+    @media (max-width: 768px) {
+        div[data-testid="stPlotlyChart"] .modebar {
+            display: none !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -298,6 +303,18 @@ DISCLAIMER_LINES = [
     "Outputs should be independently verified against the original Form 10-K, earnings materials, and other primary sources before being used for reporting, valuation, forecasting, or decision-making.",
     "Forward-looking statements, consensus estimates, and peer comparisons are inherently uncertain, and any production or external use should be reviewed by your finance, controls, compliance, and legal teams.",
 ]
+
+
+PLOTLY_CONFIG = {
+    "displaylogo": False,
+    "responsive": True,
+    "modeBarButtonsToRemove": [
+        "lasso2d",
+        "select2d",
+        "autoScale2d",
+        "toggleSpikelines",
+    ],
+}
 
 
 def clean(value: Any) -> float | None:
@@ -764,14 +781,14 @@ with left_col:
                 )
             )
         fig.update_layout(
-            title=f"Revenue & Net Income Trend ({context['range_label'].replace('Annual periods shown: ', '')}, $B)",
+            title=dict(text="Revenue & Net Income ($B)", x=0.02, xanchor="left", font=dict(size=16)),
             height=340,
             legend_title_text="",
             margin=dict(l=10, r=10, t=55, b=25),
             yaxis_title="$B",
             xaxis=dict(type="category", categoryorder="array", categoryarray=period_order),
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 
     # ── TOP RIGHT: Expenses only ──────────────────────────────────────────────
     with row1[1]:
@@ -800,7 +817,7 @@ with left_col:
                 )
             )
             fig.update_layout(
-                title=f"Expenses Trend ({context['range_label'].replace('Annual periods shown: ', '')}, $B)",
+                title=dict(text="Expenses ($B)", x=0.02, xanchor="left", font=dict(size=16)),
                 height=340,
                 showlegend=True,
                 legend_title_text="",
@@ -808,7 +825,7 @@ with left_col:
                 yaxis_title="$B",
                 xaxis=dict(type="category", categoryorder="array", categoryarray=period_order),
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 
     row2 = st.columns(2)
     with row2[0]:
@@ -835,6 +852,7 @@ with left_col:
             fig.update_traces(textposition="outside", cliponaxis=False, texttemplate="%{text}")
             fig.update_layout(
                 height=340,
+                title=dict(text="Assets vs Liabilities ($B)", x=0.02, xanchor="left", font=dict(size=16)),
                 legend_title_text="",
                 margin=dict(l=10, r=10, t=55, b=25),
                 yaxis_title="$B",
@@ -842,7 +860,7 @@ with left_col:
                 uniformtext_minsize=10,
                 uniformtext_mode="hide",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 
     with row2[1]:
         if all(metric in history.columns for metric in ["Revenue", "Expenses", "Net Income"]):
@@ -868,12 +886,12 @@ with left_col:
                 )
             )
             fig.update_layout(
-                title=f"Net Income Bridge ({context['latest_year']}, $B)",
+                title=dict(text=f"Net Income Bridge ({context['latest_year']}, $B)", x=0.02, xanchor="left", font=dict(size=16)),
                 height=340,
                 margin=dict(l=10, r=10, t=55, b=25),
                 yaxis_title="$B",
             )
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
         else:
             render_panel("Net Income Bridge", f"Bridge view was skipped because one of Revenue, Expenses, or Net Income was not available for {context['latest_year']}.")
 
@@ -929,7 +947,8 @@ with lower_left:
         )
         fig.update_traces(textposition="outside")
         fig.update_layout(height=320, legend_title_text="", margin=dict(l=10, r=10, t=55, b=10))
-        st.plotly_chart(fig, width="stretch")
+        fig.update_layout(title=dict(text="Relative Position vs Peer Average", x=0.02, xanchor="left", font=dict(size=15)))
+        st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 
         peer_display = peers.copy()
         for column in ["Revenue Growth %", "Operating Margin %", "Profit Margin %"]:
