@@ -89,6 +89,11 @@ def unique_keep_order(items: List[str]) -> List[str]:
     return result
 
 
+def keyword_sentences(text: str, keywords: tuple[str, ...], limit: int = 4) -> List[str]:
+    hits = [sentence for sentence in sentences(text) if any(keyword in sentence.lower() for keyword in keywords)]
+    return unique_keep_order(hits)[:limit]
+
+
 def get_market_snapshot(ticker: str) -> Dict[str, Any]:
     stock = yf.Ticker(ticker)
     try:
@@ -259,8 +264,7 @@ def find_priority_lines(mda_text: str, limit: int = 4) -> List[str]:
         "ai",
         "margin",
     )
-    hits = [sentence for sentence in sentences(mda_text) if any(keyword in sentence.lower() for keyword in keywords)]
-    return unique_keep_order(hits)[:limit]
+    return keyword_sentences(mda_text, keywords, limit=limit)
 
 
 def find_future_focus_lines(text: str, limit: int = 4) -> List[str]:
@@ -283,12 +287,7 @@ def find_future_focus_lines(text: str, limit: int = 4) -> List[str]:
         "efficiency",
         "moderniz",
     )
-    hits = [
-        sentence
-        for sentence in sentences(text)
-        if any(keyword in sentence.lower() for keyword in keywords)
-    ]
-    return unique_keep_order(hits)[:limit]
+    return keyword_sentences(text, keywords, limit=limit)
 
 
 def find_guidance_lines(text: str, limit: int = 3) -> List[str]:
@@ -303,8 +302,7 @@ def find_guidance_lines(text: str, limit: int = 3) -> List[str]:
         "plan to",
         "we believe",
     )
-    hits = [sentence for sentence in sentences(text) if any(keyword in sentence.lower() for keyword in keywords)]
-    return unique_keep_order(hits)[:limit]
+    return keyword_sentences(text, keywords, limit=limit)
 
 
 def find_esg_lines(text: str, limit: int = 2) -> List[str]:
@@ -319,8 +317,127 @@ def find_esg_lines(text: str, limit: int = 2) -> List[str]:
         "net zero",
         "community",
     )
-    hits = [sentence for sentence in sentences(text) if any(keyword in sentence.lower() for keyword in keywords)]
-    return unique_keep_order(hits)[:limit]
+    return keyword_sentences(text, keywords, limit=limit)
+
+
+def find_initiative_lines(text: str, limit: int = 5) -> List[str]:
+    keywords = (
+        "initiative",
+        "strateg",
+        "focus",
+        "invest",
+        "expand",
+        "launch",
+        "transform",
+        "digital",
+        "technology",
+        "platform",
+        "productivity",
+        "efficiency",
+        "moderniz",
+        "automation",
+        "customer",
+        "ai",
+        "innovation",
+    )
+    return keyword_sentences(text, keywords, limit=limit)
+
+
+def find_operating_driver_lines(text: str, limit: int = 5) -> List[str]:
+    keywords = (
+        "pricing",
+        "volume",
+        "mix",
+        "margin",
+        "expense",
+        "cost",
+        "demand",
+        "rate",
+        "yield",
+        "spread",
+        "utilization",
+        "occupancy",
+        "claims",
+        "premium",
+        "deposit",
+        "loan",
+        "efficiency",
+    )
+    return keyword_sentences(text, keywords, limit=limit)
+
+
+def find_risk_lines(text: str, limit: int = 5) -> List[str]:
+    keywords = (
+        "risk",
+        "uncertain",
+        "volatility",
+        "competition",
+        "regulator",
+        "regulation",
+        "cyber",
+        "litigation",
+        "inflation",
+        "interest rate",
+        "credit",
+        "supply chain",
+        "commodity",
+        "foreign exchange",
+        "geopolitical",
+        "tariff",
+    )
+    return keyword_sentences(text, keywords, limit=limit)
+
+
+def find_capital_allocation_lines(text: str, limit: int = 4) -> List[str]:
+    keywords = (
+        "capital allocation",
+        "capital return",
+        "dividend",
+        "repurchase",
+        "buyback",
+        "debt",
+        "liquidity",
+        "cash",
+        "capital expenditure",
+        "capex",
+        "leverage",
+        "funding",
+        "maturity",
+        "facility",
+    )
+    return keyword_sentences(text, keywords, limit=limit)
+
+
+def find_segment_lines(text: str, limit: int = 4) -> List[str]:
+    keywords = (
+        "segment",
+        "geograph",
+        "region",
+        "market",
+        "customer",
+        "product",
+        "service",
+        "business line",
+        "portfolio",
+    )
+    return keyword_sentences(text, keywords, limit=limit)
+
+
+def find_liquidity_lines(text: str, limit: int = 4) -> List[str]:
+    keywords = (
+        "liquidity",
+        "capital resources",
+        "cash",
+        "borrowings",
+        "debt",
+        "credit facility",
+        "maturity",
+        "funding",
+        "capital ratios",
+        "deposits",
+        "cash flow",
+    )
+    return keyword_sentences(text, keywords, limit=limit)
 
 
 def fallback_narrative_lines(text: str, limit: int = 4) -> List[str]:
