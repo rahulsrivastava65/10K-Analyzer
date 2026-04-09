@@ -18,9 +18,18 @@ from market_intel import (
     build_dynamic_metric_cards,
     build_numeric_highlights,
     fallback_narrative_lines,
+    find_capital_allocation_lines,
+    find_esg_lines,
     find_future_focus_lines,
+    find_guidance_lines,
+    find_initiative_lines,
+    find_liquidity_lines,
+    find_operating_driver_lines,
     find_priority_lines,
+    find_risk_lines,
+    find_segment_lines,
     find_text_disclosures,
+    get_consensus_summary,
     get_market_snapshot,
     get_peer_table,
     is_valid_section,
@@ -438,6 +447,21 @@ def list_to_html(items: List[str]) -> str:
     return "<ul class='bullet-list'>" + "".join(f"<li>{item}</li>" for item in items) + "</ul>"
 
 
+def combine_unique_lines(*groups: List[str], limit: int = 6) -> List[str]:
+    combined: List[str] = []
+    seen = set()
+    for group in groups:
+        for item in group:
+            key = (item or "").strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            combined.append(item)
+            if len(combined) >= limit:
+                return combined
+    return combined
+
+
 def label_billions(value: float | None) -> str:
     if value is None:
         return ""
@@ -473,6 +497,364 @@ def year_context(history: pd.DataFrame, filing_date: str) -> Dict[str, str]:
         "range_label": f"Annual periods shown: FY{min(years)} to FY{max(years)}",
         "latest_period_note": f"Latest Form 10-K filed on {filing_date} covering FY{latest_year}",
     }
+
+
+def build_financial_story_lines(history: pd.DataFrame, context: Dict[str, str], profile: str) -> List[str]:
+    lines: List[str] = []
+    revenue_now = latest(history, "Revenue")
+    revenue_prev = prior(history, "Revenue")
+    expense_now = latest(history, "Expenses")
+    expense_prev = prior(history, "Expenses")
+    net_income_now = latest(history, "Net Income")
+    net_income_prev = prior(history, "Net Income")
+    ocf_now = latest(history, "Operating Cash Flow")
+    fcf_now = latest(history, "Free Cash Flow")
+    assets_now = latest(history, "Assets")
+    liabilities_now = latest(history, "Liabilities")
+
+    if revenue_now is not None:
+        revenue_line = f"{context['latest_year']} revenue was {format_currency(revenue_now)}"
+        revenue_change = pct_change(revenue_now, revenue_prev)
+        if revenue_change is not None:
+            revenue_line += f", {revenue_change:+.1f}% versus {context['prior_year']}."
+        else:
+            revenue_line += "."
+        lines.append(revenue_line)
+
+    if expense_now is not None:
+        expense_label = "Operating expense" if profile == "Bank" else "Expenses"
+        expense_line = f"{expense_label} were {format_currency(expense_now)}"
+        expense_change = pct_change(expense_now, expense_prev)
+        expense_ratio = latest(history, "Expense Ratio %")
+        details = []
+        if expense_change is not None:
+            details.append(f"{expense_change:+.1f}% versus {context['prior_year']}")
+        if expense_ratio is not None:
+            details.append(f"{expense_ratio:.1f}% of revenue")
+        if details:
+            expense_line += " (" + "; ".join(details) + ")."
+        else:
+            expense_line += "."
+        lines.append(expense_line)
+
+    if net_income_now is not None:
+        net_line = f"Net income was {format_currency(net_income_now)}"
+        net_change = pct_change(net_income_now, net_income_prev)
+        net_margin = latest(history, "Net Margin %")
+        details = []
+        if net_change is not None:
+            details.append(f"{net_change:+.1f}% versus {context['prior_year']}")
+        if net_margin is not None:
+            details.append(f"net margin {net_margin:.1f}%")
+        if details:
+            net_line += " (" + "; ".join(details) + ")."
+        else:
+            net_line += "."
+        lines.append(net_line)
+
+    if ocf_now is not None:
+        cash_line = f"Operating cash flow was {format_currency(ocf_now)}"
+        if fcf_now is not None:
+            cash_line += f"; free cash flow was {format_currency(fcf_now)}."
+        else:
+            cash_line += "."
+        lines.append(cash_line)
+
+    if assets_now is not None and liabilities_now is not None and assets_now != 0:
+        leverage = liabilities_now / assets_now
+        lines.append(
+            f"Balance sheet scale remains significant with assets of {format_currency(assets_now)} and liabilities of {format_currency(liabilities_now)} ({leverage:.2f}x liabilities-to-assets)."
+        )
+
+    return lines[:5]
+
+
+def build_capital_story_lines(history: pd.DataFrame, context: Dict[str, str]) -> List[str]:
+    lines: List[str] = []
+    cash_now = latest(history, "Cash")
+    debt_now = latest(history, "Debt")
+    capex_now = latest(history, "Capex")
+    dividends_now = latest(history, "Dividends Paid")
+    buybacks_now = latest(history, "Share Repurchases")
+
+    if cash_now is not None or debt_now is not None:
+        parts = []
+        if cash_now is not None:
+            parts.append(f"cash at {format_currency(cash_now)}")
+        if debt_now is not None:
+            parts.append(f"debt at {format_currency(debt_now)}")
+        if parts:
+            lines.append(f"{context['latest_year']} capital structure ended with " + " and ".join(parts) + ".")
+
+    if capex_now is not None:
+        lines.append(f"Capital expenditure was {format_currency(capex_now)} in {context['latest_year']}.")
+    if dividends_now is not None:
+        lines.append(f"Cash dividends paid were {format_currency(dividends_now)} in {context['latest_year']}.")
+    if buybacks_now is not None:
+        lines.append(f"Share repurchases were {format_currency(buybacks_now)} in {context['latest_year']}.")
+
+    return lines[:4]
+
+
+def build_market_context_lines(
+    market: Dict[str, Any],
+    peers: pd.DataFrame,
+    consensus: Dict[str, Any],
+    market_snapshot_date: str,
+) -> List[str]:
+    lines: List[str] = []
+    industry = market.get("industry") or market.get("sector")
+    country = market.get("country")
+    employees = market.get("employees")
+    if industry:
+        base = f"The company is mapped to the {industry} industry"
+        if country:
+            base += f" and reports operations in {country}"
+        base += "."
+        lines.append(base)
+    if employees:
+        lines.append(f"External company profile indicates approximately {int(employees):,} employees as of the latest market profile refresh.")
+    if consensus.get("revenue_growth_next_year_pct") is not None:
+        lines.append(
+            f"External consensus implies next-year revenue growth of about {consensus['revenue_growth_next_year_pct']:.1f}% as of {market_snapshot_date}."
+        )
+    if consensus.get("eps_growth_next_year_pct") is not None:
+        lines.append(
+            f"External consensus implies next-year EPS growth of about {consensus['eps_growth_next_year_pct']:.1f}% as of {market_snapshot_date}."
+        )
+    if not peers.empty and market.get("forward_pe") is not None and not pd.isna(peers["Forward P/E"].mean()):
+        lines.append(
+            f"Forward P/E is {market['forward_pe'] - peers['Forward P/E'].mean():+.1f} turns versus the peer average."
+        )
+    return lines[:4]
+
+
+def build_narrative_fact_lines(
+    text_disclosures: List[Dict[str, str]],
+    numeric_highlights: List[Dict[str, Any]],
+    limit: int = 5,
+) -> List[str]:
+    lines: List[str] = []
+    for item in numeric_highlights[:3]:
+        value = f"{item['value']:.2f}" if item["label"] == "EPS" else format_currency(item["value"])
+        lines.append(f"{item['label']}: {value}. {item['detail']}")
+    for item in text_disclosures[: max(0, limit - len(lines))]:
+        lines.append(f"{item['label']}: {item['detail']}")
+    return lines[:limit]
+
+
+def make_revenue_net_income_fig(history_plot: pd.DataFrame, history: pd.DataFrame, period_order: List[str]) -> go.Figure:
+    fig = go.Figure()
+    if "Revenue" in history.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=history_plot["Period"],
+                y=history["Revenue"] / 1_000_000_000,
+                mode="lines+markers+text",
+                name="Revenue",
+                text=[label_billions_with_symbol(value) for value in history["Revenue"]],
+                textposition="top center",
+                textfont=dict(size=10, color=CHART_BLUE_DARK),
+                cliponaxis=False,
+                line=dict(color=CHART_BLUE_DARK, width=3),
+            )
+        )
+    if "Net Income" in history.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=history_plot["Period"],
+                y=history["Net Income"] / 1_000_000_000,
+                mode="lines+markers+text",
+                name="Net Income",
+                text=[label_billions_with_symbol(value) for value in history["Net Income"]],
+                textposition="bottom center",
+                textfont=dict(size=10, color=CHART_BLUE_MID),
+                cliponaxis=False,
+                line=dict(color=CHART_BLUE_MID, width=3),
+            )
+        )
+    fig.update_layout(
+        title=dict(text="Revenue & Net Income ($B)", x=0.02, xanchor="left", font=dict(size=16)),
+        height=330,
+        legend_title_text="",
+        margin=dict(l=10, r=10, t=55, b=25),
+        yaxis_title="$B",
+        xaxis=dict(type="category", categoryorder="array", categoryarray=period_order),
+    )
+    return fig
+
+
+def make_balance_fig(history_plot: pd.DataFrame, history: pd.DataFrame, period_order: List[str]) -> go.Figure | None:
+    balance = history_plot[["Period"]].copy()
+    if "Assets" in history.columns:
+        balance["Assets"] = history["Assets"] / 1_000_000_000
+    if "Liabilities" in history.columns:
+        balance["Liabilities"] = history["Liabilities"] / 1_000_000_000
+    balance_melt = balance.melt(id_vars="Period", var_name="Metric", value_name="Value").dropna(subset=["Value"])
+    if balance_melt.empty:
+        return None
+
+    fig = px.bar(
+        balance_melt,
+        x="Period",
+        y="Value",
+        color="Metric",
+        barmode="group",
+        text="Value",
+        color_discrete_map={"Assets": CHART_BLUE_DARK, "Liabilities": CHART_BLUE_LIGHT},
+    )
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False,
+        texttemplate="$%{y:.1f}B",
+        textfont=dict(size=10, color=CHART_BLUE_DARK),
+        constraintext="none",
+    )
+    balance_max = balance_melt["Value"].max()
+    fig.update_layout(
+        title=dict(text="Assets vs Liabilities ($B)", x=0.02, xanchor="left", font=dict(size=16)),
+        height=330,
+        legend_title_text="",
+        margin=dict(l=10, r=10, t=65, b=25),
+        yaxis=dict(title="$B", range=[0, balance_max * 1.18 if balance_max else 1]),
+        xaxis=dict(type="category", categoryorder="array", categoryarray=period_order),
+    )
+    return fig
+
+
+def render_comprehensive_brief(
+    company: Dict[str, Any],
+    filing: Dict[str, Any],
+    history: pd.DataFrame,
+    context: Dict[str, str],
+    market_snapshot_date: str,
+    business_summary: str,
+    scale_line: str,
+    dynamic_metrics: List[Dict[str, Any]],
+    numeric_highlights: List[Dict[str, Any]],
+    text_disclosures: List[Dict[str, str]],
+    focus_lines: List[str],
+    reporting_lines: List[str],
+    section_coverage_lines: List[str],
+    peer_lines: List[str],
+    peers: pd.DataFrame,
+    metric_sources: pd.DataFrame,
+    available_sections: Dict[str, str],
+    market_context_lines: List[str],
+    initiative_lines: List[str],
+    operating_driver_lines: List[str],
+    segment_lines: List[str],
+    capital_lines: List[str],
+    liquidity_lines: List[str],
+    risk_lines: List[str],
+    outlook_lines: List[str],
+    esg_lines: List[str],
+    financial_story_lines: List[str],
+    capital_story_lines: List[str],
+) -> None:
+    hero_cols = st.columns([1.9, 1.1], vertical_alignment="top")
+    with hero_cols[0]:
+        st.markdown(
+            f"""
+            <div class="hero">
+                <div class="eyebrow">Comprehensive Brief</div>
+                <div class="hero-title">{company['name']} ({company['ticker']})</div>
+                <p class="hero-copy">{business_summary}</p>
+                <p class="copy" style="margin-top:0.45rem;">{scale_line}</p>
+                <div>
+                    <span class="timeline-pill">{context['range_label']}</span>
+                    <span class="timeline-pill">Filed: {filing['filing_date']}</span>
+                    <span class="timeline-pill">Profile: {company['profile']}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with hero_cols[1]:
+        render_panel(
+            "How To Read This",
+            list_to_html(
+                [
+                    "This version is designed as a short-form filing brief, organized like a 3-4 page management memo.",
+                    "It emphasizes business context, management priorities, operating drivers, risks, capital allocation, and outlook.",
+                    "The current download exports still reflect the executive snapshot format.",
+                ]
+            ),
+        )
+
+    metric_cols = st.columns(4)
+    eps_metric = "Diluted EPS" if "Diluted EPS" in history.columns else "Basic EPS"
+    brief_specs = [
+        ("Revenue", format_currency(latest(history, "Revenue")), format_delta(pct_change(latest(history, "Revenue"), prior(history, "Revenue")), context["prior_year"]), f"{context['latest_year']} annual revenue.", tone_for_change(pct_change(latest(history, "Revenue"), prior(history, "Revenue")))),
+        ("Expenses", format_currency(latest(history, "Expenses")), format_delta(pct_change(latest(history, "Expenses"), prior(history, "Expenses")), context["prior_year"]), f"{context['latest_year']} annual expenses.", tone_for_change(pct_change(latest(history, "Expenses"), prior(history, "Expenses")), positive_good=False)),
+        ("Net Income", format_currency(latest(history, "Net Income")), format_delta(pct_change(latest(history, "Net Income"), prior(history, "Net Income")), context["prior_year"]), f"{context['latest_year']} annual net income.", tone_for_change(pct_change(latest(history, "Net Income"), prior(history, "Net Income")))),
+        ("EPS", "-" if latest(history, eps_metric) is None else f"{latest(history, eps_metric):.2f}", format_delta(pct_change(latest(history, eps_metric), prior(history, eps_metric)), context["prior_year"]), f"{eps_metric} for {context['latest_year']}.", tone_for_change(pct_change(latest(history, eps_metric), prior(history, eps_metric)))),
+    ]
+    for idx, spec in enumerate(brief_specs):
+        with metric_cols[idx]:
+            render_kpi(*spec)
+
+    tabs = st.tabs(["Overview", "Initiatives", "Financials", "Risks & Outlook"])
+
+    with tabs[0]:
+        left, right = st.columns([1.1, 1.0])
+        with left:
+            render_panel("Company Overview", list_to_html(combine_unique_lines(financial_story_lines[:2], market_context_lines[:2], limit=4)))
+            render_panel("Business Footprint", list_to_html(combine_unique_lines(segment_lines, market_context_lines, limit=4)))
+        with right:
+            render_panel("What Changed This Year", list_to_html(financial_story_lines))
+            render_panel("Reported Facts Worth Knowing", list_to_html(build_narrative_fact_lines(text_disclosures, numeric_highlights, limit=5)))
+
+    with tabs[1]:
+        left, right = st.columns(2)
+        with left:
+            render_panel("Management Priorities", list_to_html(combine_unique_lines(initiative_lines, focus_lines, limit=6)))
+            render_panel("Operating Drivers", list_to_html(operating_driver_lines))
+        with right:
+            render_panel("Capital Allocation & Investment", list_to_html(combine_unique_lines(capital_lines, capital_story_lines, limit=6)))
+            render_panel("ESG / People / Other Themes", list_to_html(esg_lines if esg_lines else ["Material ESG or people themes were not clearly captured in the extracted filing text."]))
+
+    with tabs[2]:
+        chart_left, chart_right = st.columns(2)
+        history_plot = history.copy()
+        history_plot["Period"] = period_labels(history_plot) if not history_plot.empty and "Year" in history_plot.columns else pd.Series(dtype=str)
+        period_order = history_plot["Period"].tolist() if "Period" in history_plot.columns else []
+        with chart_left:
+            if not history.empty:
+                st.plotly_chart(make_revenue_net_income_fig(history_plot, history, period_order), width="stretch", config=PLOTLY_CONFIG)
+        with chart_right:
+            balance_fig = make_balance_fig(history_plot, history, period_order)
+            if balance_fig is not None:
+                st.plotly_chart(balance_fig, width="stretch", config=PLOTLY_CONFIG)
+            else:
+                render_panel("Assets vs Liabilities", "Balance sheet history was not available for the periods shown.")
+
+        bottom_left, bottom_right = st.columns([1.1, 1.0])
+        with bottom_left:
+            render_panel("Financial Performance Readout", list_to_html(financial_story_lines))
+        with bottom_right:
+            render_panel("Liquidity & Capital Position", list_to_html(combine_unique_lines(capital_story_lines, liquidity_lines, limit=6)))
+
+        if dynamic_metrics:
+            st.markdown('<div class="section-title" style="margin-top:0.8rem;">Key Ratios</div>', unsafe_allow_html=True)
+            ratio_cols = st.columns(min(4, len(dynamic_metrics[:4])) or 1)
+            for idx, item in enumerate(dynamic_metrics[:4]):
+                value = format_percent(item["value"]) if item["suffix"] == "%" else format_ratio(item["value"])
+                with ratio_cols[idx]:
+                    render_chip(item["theme"], item["label"], value, f"{context['latest_year']} disclosed value.")
+
+    with tabs[3]:
+        left, right = st.columns([1.05, 1.0])
+        with left:
+            render_panel("Key Risks & Watch Items", list_to_html(risk_lines))
+            render_panel("Management Outlook", list_to_html(outlook_lines))
+        with right:
+            render_panel("Peer / Market Context", list_to_html(combine_unique_lines(peer_lines, market_context_lines, limit=5)))
+            render_panel("Source Basis", list_to_html(reporting_lines[:4] + section_coverage_lines[:2]))
+            if not metric_sources.empty:
+                preferred_cols = [column for column in ["Metric", "Source Concept", "Validation Status"] if column in metric_sources.columns]
+                if preferred_cols:
+                    st.dataframe(metric_sources[preferred_cols], width="stretch", hide_index=True)
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -512,6 +894,7 @@ if "company_search_input" not in st.session_state:
     st.session_state["company_search_input"] = st.session_state.get("summary_query", "AAPL")
 if "company_match_display" not in st.session_state:
     st.session_state["company_match_display"] = ""
+default_summary_style = st.session_state.get("summary_style", "Executive Snapshot")
 
 c1, c2, c3, c4 = st.columns([2.2, 0.8, 0.75, 1.0], vertical_alignment="bottom")
 query = c1.text_input(
@@ -533,6 +916,13 @@ if advanced:
         help="SEC requires a descriptive identity string that includes an email address.",
     )
 build_clicked = c4.button("Generate Summary", type="primary", use_container_width=True)
+summary_style = st.radio(
+    "Summary Style",
+    ["Executive Snapshot", "Comprehensive Brief"],
+    index=["Executive Snapshot", "Comprehensive Brief"].index(default_summary_style) if default_summary_style in ["Executive Snapshot", "Comprehensive Brief"] else 0,
+    horizontal=True,
+)
+st.session_state["summary_style"] = summary_style
 
 matches = run_company_matches(query, user_agent)
 selected_query = query.strip()
@@ -598,6 +988,7 @@ filing_text = load_filing_text(filing["local_text_path"])
 available_sections = {name: text for name, text in sections.items() if is_valid_section(text)}
 context = year_context(history, filing["filing_date"])
 market_snapshot_date = date.today().strftime("%B %d, %Y")
+consensus = get_consensus_summary(market)
 business_summary = summarize_business(market, available_sections.get("Business", ""))
 narrative_source = " ".join(
     [
@@ -622,6 +1013,17 @@ focus_lines = future_focus_lines or priority_lines or fallback_narrative_lines(n
 dynamic_metrics = build_dynamic_metric_cards(history, company["profile"])
 numeric_highlights = build_numeric_highlights(history)
 text_disclosures = find_text_disclosures(narrative_source)
+initiative_lines = find_initiative_lines(" ".join([available_sections.get("MD&A", ""), available_sections.get("Business", "")]), limit=6)
+operating_driver_lines = find_operating_driver_lines(available_sections.get("MD&A", ""), limit=5)
+segment_lines = find_segment_lines(" ".join([available_sections.get("Business", ""), available_sections.get("MD&A", "")]), limit=4)
+capital_lines = find_capital_allocation_lines(" ".join([available_sections.get("MD&A", ""), filing_text]), limit=5)
+liquidity_lines = find_liquidity_lines(" ".join([available_sections.get("MD&A", ""), filing_text]), limit=4)
+risk_watch_lines = find_risk_lines(" ".join([available_sections.get("Risk Factors", ""), available_sections.get("MD&A", "")]), limit=5)
+guidance_lines = find_guidance_lines(" ".join([available_sections.get("MD&A", ""), available_sections.get("Business", "")]), limit=4)
+esg_lines = find_esg_lines(narrative_source, limit=3)
+financial_story_lines = build_financial_story_lines(history, context, company["profile"])
+capital_story_lines = build_capital_story_lines(history, context)
+market_context_lines = build_market_context_lines(market, peers, consensus, market_snapshot_date)
 
 peer_lines: List[str] = []
 if not peers.empty:
@@ -646,6 +1048,11 @@ if not section_coverage_lines:
     section_coverage_lines = ["Narrative sections were limited, so the summary relies primarily on structured financial data."]
 
 period_summary = f"{context['range_label']}. {context['latest_period_note']}. Market data snapshot: {market_snapshot_date}."
+outlook_lines = combine_unique_lines(guidance_lines, future_focus_lines, market_context_lines, limit=5)
+if not risk_watch_lines:
+    risk_watch_lines = ["Specific risk statements were not cleanly extracted from the available filing text, so the original Risk Factors section should still be reviewed."]
+if not outlook_lines:
+    outlook_lines = ["Forward-looking commentary was limited in the extracted text, so expectations should be checked directly in MD&A and earnings materials."]
 
 excel_bytes = build_excel_export(
     company,
@@ -679,6 +1086,51 @@ ppt_bytes = build_ppt_export(
     reporting_lines,
     DISCLAIMER_LINES,
 )
+
+if summary_style == "Comprehensive Brief":
+    render_comprehensive_brief(
+        company=company,
+        filing=filing,
+        history=history,
+        context=context,
+        market_snapshot_date=market_snapshot_date,
+        business_summary=business_summary,
+        scale_line=scale_line,
+        dynamic_metrics=dynamic_metrics,
+        numeric_highlights=numeric_highlights,
+        text_disclosures=text_disclosures,
+        focus_lines=focus_lines,
+        reporting_lines=reporting_lines,
+        section_coverage_lines=section_coverage_lines,
+        peer_lines=peer_lines,
+        peers=peers,
+        metric_sources=metric_sources,
+        available_sections=available_sections,
+        market_context_lines=market_context_lines,
+        initiative_lines=initiative_lines,
+        operating_driver_lines=operating_driver_lines,
+        segment_lines=segment_lines,
+        capital_lines=capital_lines,
+        liquidity_lines=liquidity_lines,
+        risk_lines=risk_watch_lines,
+        outlook_lines=outlook_lines,
+        esg_lines=esg_lines,
+        financial_story_lines=financial_story_lines,
+        capital_story_lines=capital_story_lines,
+    )
+    st.markdown(
+        f"""
+        <div class="disclaimer">
+            <div class="disclaimer-title">Important Disclaimer</div>
+            <ul class="bullet-list">
+                {''.join(f'<li>{line}</li>' for line in DISCLAIMER_LINES)}
+            </ul>
+            <div class="copy" style="margin-top:0.5rem;">Comprehensive brief reflects annual Form 10-K periods through {context['latest_year']} and external market data pulled on {market_snapshot_date}.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.stop()
 
 top_row = st.columns([2.5, 0.55, 0.55, 0.55])
 with top_row[0]:
