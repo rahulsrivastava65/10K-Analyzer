@@ -308,6 +308,7 @@ DISCLAIMER_LINES = [
 PLOTLY_CONFIG = {
     "displaylogo": False,
     "responsive": True,
+    "displayModeBar": False,
     "modeBarButtonsToRemove": [
         "lasso2d",
         "select2d",
@@ -942,7 +943,6 @@ with lower_left:
             color="View",
             barmode="group",
             text="Text",
-            title=f"Relative Position vs Peer Average ({market_snapshot_date})",
             color_discrete_map={"Target": "#17365d", "Peer Avg": "#0f766e"},
         )
         fig.update_traces(textposition="outside")
