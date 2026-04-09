@@ -8,35 +8,45 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+import market_intel as mi
 from exports import (
     build_excel_export,
     build_kpi_rows,
     build_pdf_export,
     build_ppt_export,
 )
-from market_intel import (
-    build_dynamic_metric_cards,
-    build_numeric_highlights,
-    fallback_narrative_lines,
-    find_capital_allocation_lines,
-    find_esg_lines,
-    find_future_focus_lines,
-    find_guidance_lines,
-    find_initiative_lines,
-    find_liquidity_lines,
-    find_operating_driver_lines,
-    find_priority_lines,
-    find_risk_lines,
-    find_segment_lines,
-    find_text_disclosures,
-    get_consensus_summary,
-    get_market_snapshot,
-    get_peer_table,
-    is_valid_section,
-    load_filing_text,
-    summarize_business,
-)
 from sec_10k_engine import Sec10KAnalyzer
+
+
+build_dynamic_metric_cards = mi.build_dynamic_metric_cards
+build_numeric_highlights = mi.build_numeric_highlights
+fallback_narrative_lines = mi.fallback_narrative_lines
+find_future_focus_lines = mi.find_future_focus_lines
+find_priority_lines = mi.find_priority_lines
+find_text_disclosures = mi.find_text_disclosures
+get_market_snapshot = mi.get_market_snapshot
+get_peer_table = mi.get_peer_table
+is_valid_section = mi.is_valid_section
+load_filing_text = mi.load_filing_text
+summarize_business = mi.summarize_business
+find_capital_allocation_lines = getattr(mi, "find_capital_allocation_lines", lambda text, limit=4: [])
+find_esg_lines = getattr(mi, "find_esg_lines", lambda text, limit=2: [])
+find_guidance_lines = getattr(mi, "find_guidance_lines", lambda text, limit=3: [])
+find_initiative_lines = getattr(mi, "find_initiative_lines", lambda text, limit=5: [])
+find_liquidity_lines = getattr(mi, "find_liquidity_lines", lambda text, limit=4: [])
+find_operating_driver_lines = getattr(mi, "find_operating_driver_lines", lambda text, limit=5: [])
+find_risk_lines = getattr(mi, "find_risk_lines", lambda text, limit=5: [])
+find_segment_lines = getattr(mi, "find_segment_lines", lambda text, limit=4: [])
+get_consensus_summary = getattr(
+    mi,
+    "get_consensus_summary",
+    lambda market_snapshot: {
+        "revenue_growth_next_year_pct": None,
+        "eps_growth_next_year_pct": None,
+        "recommendation_mix": None,
+        "target_upside_pct": None,
+    },
+)
 
 
 st.set_page_config(page_title="10K Summary", layout="wide")
