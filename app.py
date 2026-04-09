@@ -184,6 +184,16 @@ st.markdown(
         font-size: 0.92rem;
         margin-bottom: 0.55rem;
     }
+    .block-container {
+        padding-top: 1.1rem;
+        padding-bottom: 2rem;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        min-width: 0;
+    }
+    div[data-testid="stPlotlyChart"] {
+        width: 100%;
+    }
     div[data-testid="stForm"] {
         background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(246,248,251,0.92));
         border: 1px solid var(--line);
@@ -209,6 +219,72 @@ st.markdown(
     }
     div[data-testid="stTextInput"] input, div[data-testid="stSelectbox"] div[data-baseweb="select"] {
         border-radius: 12px;
+    }
+    @media (max-width: 1024px) {
+        .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            flex: 1 1 calc(50% - 0.45rem) !important;
+            width: calc(50% - 0.45rem) !important;
+            min-width: calc(50% - 0.45rem) !important;
+        }
+        .hero-title {
+            font-size: 1.8rem;
+        }
+        .kpi-value {
+            font-size: 1.34rem;
+        }
+        .panel, .hero, .disclaimer {
+            padding: 0.9rem 0.95rem;
+        }
+    }
+    @media (max-width: 640px) {
+        .block-container {
+            padding-left: 0.8rem;
+            padding-right: 0.8rem;
+            padding-top: 0.75rem;
+        }
+        div[data-testid="stHorizontalBlock"] {
+            gap: 0.65rem;
+        }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            min-width: 100% !important;
+        }
+        .hero-title {
+            font-size: 1.52rem;
+            line-height: 1.2;
+        }
+        .hero-copy, .copy, .bullet-list {
+            font-size: 0.89rem;
+        }
+        .section-title {
+            font-size: 1rem;
+        }
+        .section-caption {
+            font-size: 0.84rem;
+        }
+        .kpi, .chip {
+            min-height: 0;
+            padding: 0.78rem 0.82rem;
+        }
+        .kpi-value {
+            font-size: 1.22rem;
+        }
+        .timeline-pill {
+            font-size: 0.74rem;
+            margin-right: 0.3rem;
+        }
+        div.stButton > button, button[kind="primary"] {
+            min-height: 2.75rem;
+        }
     }
     </style>
     """,
