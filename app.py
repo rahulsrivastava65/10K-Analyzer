@@ -305,6 +305,12 @@ DISCLAIMER_LINES = [
 ]
 
 
+CHART_BLUE_DARK = "#17365d"
+CHART_BLUE_MID = "#4f6fae"
+CHART_BLUE_LIGHT = "#8fb3e8"
+CHART_BLUE_SOFT = "#bfd3f2"
+
+
 PLOTLY_CONFIG = {
     "displaylogo": False,
     "responsive": True,
@@ -762,9 +768,9 @@ with left_col:
                     name="Revenue",
                     text=[label_billions_with_symbol(value) for value in history["Revenue"]],
                     textposition="top center",
-                    textfont=dict(size=11, color="#17365d"),
+                    textfont=dict(size=11, color=CHART_BLUE_DARK),
                     cliponaxis=False,
-                    line=dict(color="#17365d", width=3),
+                    line=dict(color=CHART_BLUE_DARK, width=3),
                 )
             )
         if "Net Income" in history.columns:
@@ -776,9 +782,9 @@ with left_col:
                     name="Net Income",
                     text=[label_billions_with_symbol(value) for value in history["Net Income"]],
                     textposition="bottom center",
-                    textfont=dict(size=11, color="#0f766e"),
+                    textfont=dict(size=11, color=CHART_BLUE_MID),
                     cliponaxis=False,
-                    line=dict(color="#0f766e", width=3),
+                    line=dict(color=CHART_BLUE_MID, width=3),
                 )
             )
         fig.update_layout(
@@ -811,9 +817,9 @@ with left_col:
                     mode="lines+markers+text",
                     text=[label_billions_with_symbol(value) for value in exp_plot["ExpenseValue"]],
                     textposition="top center",
-                    textfont=dict(size=11, color="#9a6700"),
+                    textfont=dict(size=11, color=CHART_BLUE_MID),
                     cliponaxis=False,
-                    line=dict(color="#9a6700", width=3),
+                    line=dict(color=CHART_BLUE_MID, width=3),
                     name="Expenses",
                 )
             )
@@ -848,18 +854,23 @@ with left_col:
                 barmode="group",
                 text="Text",
                 title=f"Assets vs Liabilities ({context['range_label'].replace('Annual periods shown: ', '')}, $B)",
-                color_discrete_map={"Assets": "#0f766e", "Liabilities": "#b42318"},
+                color_discrete_map={"Assets": CHART_BLUE_DARK, "Liabilities": CHART_BLUE_LIGHT},
             )
-            fig.update_traces(textposition="outside", cliponaxis=False, texttemplate="%{text}")
+            fig.update_traces(
+                textposition="outside",
+                cliponaxis=False,
+                texttemplate="$%{y:.1f}B",
+                textfont=dict(size=11, color=CHART_BLUE_DARK),
+                constraintext="none",
+            )
+            balance_max = balance_melt["Value"].max() if not balance_melt.empty else 0
             fig.update_layout(
                 height=340,
                 title=dict(text="Assets vs Liabilities ($B)", x=0.02, xanchor="left", font=dict(size=16)),
                 legend_title_text="",
-                margin=dict(l=10, r=10, t=55, b=25),
-                yaxis_title="$B",
+                margin=dict(l=10, r=10, t=70, b=25),
+                yaxis=dict(title="$B", range=[0, balance_max * 1.18 if balance_max else 1]),
                 xaxis=dict(type="category", categoryorder="array", categoryarray=period_order),
-                uniformtext_minsize=10,
-                uniformtext_mode="hide",
             )
             st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG)
 
@@ -881,9 +892,9 @@ with left_col:
                     text=[format_currency(value) for value in waterfall["Amount"]],
                     textposition="outside",
                     connector={"line": {"color": "#94a3b8"}},
-                    increasing={"marker": {"color": "#17365d"}},
-                    decreasing={"marker": {"color": "#9a6700"}},
-                    totals={"marker": {"color": "#0f766e"}},
+                    increasing={"marker": {"color": CHART_BLUE_DARK}},
+                    decreasing={"marker": {"color": CHART_BLUE_LIGHT}},
+                    totals={"marker": {"color": CHART_BLUE_MID}},
                 )
             )
             fig.update_layout(
@@ -943,7 +954,7 @@ with lower_left:
             color="View",
             barmode="group",
             text="Text",
-            color_discrete_map={"Target": "#17365d", "Peer Avg": "#0f766e"},
+            color_discrete_map={"Target": CHART_BLUE_DARK, "Peer Avg": CHART_BLUE_LIGHT},
         )
         fig.update_traces(textposition="outside")
         fig.update_layout(height=320, legend_title_text="", margin=dict(l=10, r=10, t=55, b=10))
